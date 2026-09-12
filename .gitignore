@@ -1,0 +1,6 @@
+.env
+config.json
+DEPLOYED_FROM
+.DS_Store
+*.swp
+*.swo

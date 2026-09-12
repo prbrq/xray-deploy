@@ -1,0 +1,15 @@
+services:
+  xray:
+    image: ${XRAY_IMAGE:?XRAY_IMAGE is required}
+    container_name: xray-reality
+    command: ["-c", "/etc/xray/config.json"]
+    ports:
+      - "443:443/tcp"
+    volumes:
+      - ./config.json:/etc/xray/config.json:ro
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
