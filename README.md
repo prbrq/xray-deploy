@@ -42,7 +42,7 @@ Internet
 ## 1. Подготовить VPS
 
 ```bash
-git clone <REPOSITORY_URL> xray-deploy
+git clone https://github.com/prbrq/xray-deploy.git xray-deploy
 cd xray-deploy
 chmod +x install-docker.sh bootstrap.sh deploy.sh profile.sh
 sudo ./install-docker.sh
@@ -68,7 +68,9 @@ Target намеренно не выбирается автоматически. 
 curl -s https://ipinfo.io/json
 ```
 
-Не выбирайте без причины популярный generic CDN. Bootstrap проверяет выбранный host командой `xray tls ping` и требует успешный TLS handshake именно с SNI.
+В prompt допустимы оба формата: hostname, например `globconnex.com`, и полная HTTPS-ссылка, например `https://globconnex.com/`. Скрипт безопасно уберёт `https://` и завершающий `/`, сохранит hostname и проверит его командой `xray tls ping` с SNI. URL с путём, query-параметрами или портом не поддерживается.
+
+Не выбирайте без причины популярный generic CDN.
 
 Если проверка не прошла, не обходите её. Типичные причины: hostname не разрешается с VPS, VPS не может установить исходящее HTTPS-соединение, сервер не принимает handshake с данным SNI, либо target нестабилен или фильтруется в сети VPS. Проверьте DNS и исходящий HTTPS, затем выберите другой стабильный HTTPS host и повторите `sudo ./bootstrap.sh`.
 

@@ -18,6 +18,14 @@ prompt(){
   printf -v "$var_name" '%s' "$value"
 }
 valid_hostname(){ [[ "$1" =~ ^[A-Za-z0-9.-]+$ ]] && [[ "$1" != .* ]] && [[ "$1" != *..* ]]; }
+normalize_reality_target(){
+  local value="$1"
+  if [[ "$value" =~ ^[Hh][Tt][Tt][Pp][Ss]:// ]]; then
+    value="${value:${#BASH_REMATCH[0]}}"
+  fi
+  while [[ "$value" == */ ]]; do value="${value%/}"; done
+  printf '%s' "$value"
+}
 
 [[ "${EUID}" -eq 0 ]] || die "Run ./bootstrap.sh as root (or with sudo)."
 
@@ -84,9 +92,10 @@ if [[ -z "${REALITY_TARGET:-}" ]]; then
   echo
   echo "Choose a stable HTTPS REALITY target for this VPS."
   echo "Prefer a suitable host near/in the same ASN and avoid generic CDN targets."
-  prompt REALITY_TARGET "REALITY target hostname (without :443)"
+  prompt REALITY_TARGET "REALITY target hostname or https:// URL"
 fi
-valid_hostname "$REALITY_TARGET" || die "Invalid REALITY_TARGET hostname: $REALITY_TARGET"
+REALITY_TARGET="$(normalize_reality_target "$REALITY_TARGET")"
+valid_hostname "$REALITY_TARGET" || die "Invalid REALITY_TARGET. Enter a hostname or an HTTPS URL without a path or port."
 REALITY_SNI="${REALITY_SNI:-$REALITY_TARGET}"
 valid_hostname "$REALITY_SNI" || die "Invalid REALITY_SNI hostname: $REALITY_SNI"
 case "$CLIENT_FINGERPRINT" in firefox|safari|chrome|edge|ios|android|random|randomized) ;; *) die "Unsupported CLIENT_FINGERPRINT '$CLIENT_FINGERPRINT'." ;; esac
