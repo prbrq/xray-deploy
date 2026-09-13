@@ -26,6 +26,9 @@ if "${" in src:
     raise SystemExit("Unresolved template variable remains in config.json")
 Path("config.json").write_text(src, encoding="utf-8")
 PY2
+XRAY_UID="$(docker image inspect --format '{{.Config.User}}' "$XRAY_IMAGE")"
+[[ "$XRAY_UID" =~ ^[1-9][0-9]*$ ]] || die "Xray image must define a numeric non-root default user."
+chown "$XRAY_UID:$XRAY_UID" config.json
 chmod 600 config.json .env
 
 echo "Validating Xray configuration..."

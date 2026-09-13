@@ -80,6 +80,7 @@ xray-deploy/
 ```
 
 `.git/` больше нет. `.env` и `config.json` имеют `chmod 600`.
+Xray работает без root: `deploy.sh` назначает сгенерированному `config.json` UID, заданный образом Xray по умолчанию. Права `0600` и read-only mount сохраняются.
 
 ### Профиль OneXray
 
