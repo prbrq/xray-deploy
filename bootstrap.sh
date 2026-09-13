@@ -35,10 +35,10 @@ echo "[1/5] Checking prerequisites..."
 if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
   die "Docker Engine with Compose v2 is required. On supported Ubuntu/Debian run ./install-docker.sh as root, then rerun ./bootstrap.sh."
 fi
-command -v openssl >/dev/null 2>&1 || die "openssl is required."
-command -v python3 >/dev/null 2>&1 || die "python3 is required."
-command -v curl >/dev/null 2>&1 || die "curl is required."
-[[ -f profiles.py ]] || die "profiles.py not found."
+command -v openssl >/dev/null 2>&1 || die "openssl is required. Install it with the OS package manager, then rerun ./bootstrap.sh."
+command -v python3 >/dev/null 2>&1 || die "python3 is required. Install it with the OS package manager, then rerun ./bootstrap.sh."
+command -v curl >/dev/null 2>&1 || die "curl is required. Install it with the OS package manager, then rerun ./bootstrap.sh."
+[[ -f profiles.py ]] || die "profiles.py is missing. Restore the trusted deployment files before running bootstrap."
 
 HAS_GIT=0
 REPOSITORY="unknown"; REVISION="unknown"
@@ -60,20 +60,26 @@ XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core@sha256:3629bf7d825748cda29698ac
 CLIENT_FINGERPRINT="${CLIENT_FINGERPRINT:-firefox}"
 
 echo "[2/5] Preparing pinned Xray image..."
-docker pull "$XRAY_IMAGE" >/dev/null
+if ! docker pull "$XRAY_IMAGE" >/dev/null; then
+  die "Could not download the pinned Xray image. Check the Docker daemon, DNS and outbound HTTPS access, then rerun ./bootstrap.sh."
+fi
 
 if [[ -z "${CLIENT_UUID:-}" ]]; then
   echo "Preparing initial VLESS access credentials..."
-  CLIENT_UUID="$(docker run --rm "$XRAY_IMAGE" uuid | tail -n 1 | tr -d '\r')"
+  if ! CLIENT_UUID="$(docker run --rm "$XRAY_IMAGE" uuid | tail -n 1 | tr -d '\r')" || [[ -z "$CLIENT_UUID" ]]; then
+    die "Could not create the initial profile UUID. Check that the pinned image runs in Docker, then rerun ./bootstrap.sh."
+  fi
 fi
 
 if [[ -z "${REALITY_PRIVATE_KEY:-}" || -z "${REALITY_PUBLIC_KEY:-}" ]]; then
   echo "Preparing REALITY credentials..."
-  key_output="$(docker run --rm "$XRAY_IMAGE" x25519)"
+  if ! key_output="$(docker run --rm "$XRAY_IMAGE" x25519)"; then
+    die "Could not generate REALITY credentials. Check that the pinned image runs in Docker, then rerun ./bootstrap.sh."
+  fi
   REALITY_PRIVATE_KEY="$(printf '%s\n' "$key_output" | awk -F': ' '/^PrivateKey:/ {print $2; exit}')"
   REALITY_PUBLIC_KEY="$(printf '%s\n' "$key_output" | awk -F': ' '/^Password \(PublicKey\):/ {print $2; found=1; exit} /^Password:/ {candidate=$2} END {if (!found && candidate != "") print candidate}')"
-  [[ -n "$REALITY_PRIVATE_KEY" ]] || die "Could not parse PrivateKey from xray x25519 output."
-  [[ -n "$REALITY_PUBLIC_KEY" ]] || die "Could not parse Password/PublicKey from xray x25519 output."
+  [[ -n "$REALITY_PRIVATE_KEY" ]] || die "Could not parse the generated REALITY private key. Verify the pinned image, then rerun ./bootstrap.sh."
+  [[ -n "$REALITY_PUBLIC_KEY" ]] || die "Could not parse the generated REALITY public key. Verify the pinned image, then rerun ./bootstrap.sh."
 fi
 
 if [[ -z "${REALITY_SHORT_ID:-}" ]]; then
@@ -99,7 +105,7 @@ REALITY_TARGET="$(normalize_reality_target "$REALITY_TARGET")"
 valid_hostname "$REALITY_TARGET" || die "Invalid REALITY_TARGET. Enter a hostname or an HTTPS URL without a path or port."
 REALITY_SNI="${REALITY_SNI:-$REALITY_TARGET}"
 valid_hostname "$REALITY_SNI" || die "Invalid REALITY_SNI hostname: $REALITY_SNI"
-case "$CLIENT_FINGERPRINT" in firefox|safari|chrome|edge|ios|android|random|randomized) ;; *) die "Unsupported CLIENT_FINGERPRINT '$CLIENT_FINGERPRINT'." ;; esac
+case "$CLIENT_FINGERPRINT" in firefox|safari|chrome|edge|ios|android|random|randomized) ;; *) die "Unsupported CLIENT_FINGERPRINT '$CLIENT_FINGERPRINT'. Set it to a supported value in .env, then rerun ./bootstrap.sh." ;; esac
 
 echo
 echo "[4/5] Verifying the REALITY target TLS handshake..."
@@ -128,7 +134,9 @@ chmod 600 profiles.json
 
 echo
 echo "[5/5] Deploying Xray..."
-./deploy.sh
+if ! ./deploy.sh; then
+  die "Deployment did not complete. Correct the error above, then rerun ./bootstrap.sh; existing credentials in .env will be reused."
+fi
 
 if [[ "$HAS_GIT" -eq 1 || ! -f DEPLOYED_FROM ]]; then
   deployed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"

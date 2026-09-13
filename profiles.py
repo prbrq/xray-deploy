@@ -67,7 +67,7 @@ def load(path: Path) -> list[dict[str, str]]:
     if path.is_symlink() or not path.is_file():
         die(f"{path} must be a regular file.")
     if mode & 0o077:
-        die(f"{path} permissions must be 0600.")
+        die(f"{path} permissions must be 0600. Restrict access with chmod 600; do not weaken permissions to continue.")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -133,14 +133,14 @@ def main(argv: list[str]) -> None:
             if profile["name"] == name:
                 print(profile["uuid"])
                 return
-        die(f"Profile '{name}' not found.")
+        die(f"Profile '{name}' not found. Run 'profiles.py list' locally to inspect available names.")
     elif command == "add":
         if len(values) != 2:
             die("Usage: profiles.py add NAME UUID")
         name = validate_name(values[0])
         profile_uuid = validate_uuid(values[1])
         if any(profile["name"] == name for profile in profiles):
-            die(f"Profile '{name}' already exists.")
+            die(f"Profile '{name}' already exists. Choose a different name or use it with profile.sh show.")
         if any(profile["uuid"].lower() == profile_uuid.lower() for profile in profiles):
             die("Profile UUID already exists.")
         profiles.append({"name": name, "uuid": profile_uuid})
@@ -151,7 +151,7 @@ def main(argv: list[str]) -> None:
         name = validate_name(values[0])
         remaining = [profile for profile in profiles if profile["name"] != name]
         if len(remaining) == len(profiles):
-            die(f"Profile '{name}' not found.")
+            die(f"Profile '{name}' not found. Run 'profile.sh list' locally to inspect available names.")
         if not remaining:
             die("Cannot revoke the last profile. Add another profile first.")
         save(path, remaining)

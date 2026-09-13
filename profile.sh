@@ -3,13 +3,14 @@ set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 die(){ echo "ERROR: $*" >&2; exit 1; }
 [[ "${EUID}" -eq 0 ]] || die "Run ./profile.sh as root (or with sudo)."
-[[ -f .env ]] || die ".env not found. Run ./bootstrap.sh first."
-[[ -f profiles.py ]] || die "profiles.py not found. Restore the deployment files before managing profiles."
+[[ -f .env ]] || die ".env not found. Restore it from a protected backup or run ./bootstrap.sh first."
+[[ -f profiles.py ]] || die "profiles.py is missing. Restore the trusted deployment files before managing profiles."
+command -v python3 >/dev/null 2>&1 || die "python3 is required. Install it with the OS package manager, then rerun ./profile.sh."
 set -a
 source .env
 set +a
 for name in XRAY_IMAGE SERVER_ADDRESS CLIENT_UUID REALITY_SNI REALITY_PUBLIC_KEY REALITY_SHORT_ID CLIENT_FINGERPRINT; do
-  [[ -n "${!name:-}" ]] || die "$name is empty in .env"
+  [[ -n "${!name:-}" ]] || die "$name is empty in .env. Restore the protected credentials backup or correct the local file; do not publish its contents."
 done
 python3 ./profiles.py ensure "$CLIENT_UUID"
 chmod 600 .env profiles.json
@@ -73,12 +74,14 @@ case "$command" in
     ;;
   add)
     [[ "$#" -eq 2 ]] || usage
-    command -v docker >/dev/null 2>&1 || die "Docker is not installed."
+    command -v docker >/dev/null 2>&1 || die "Docker is not available. On a supported VPS run ./install-docker.sh as root, then retry adding the profile."
     candidate="$(mktemp .profiles.json.XXXXXX)"
     trap 'rm -f -- "$candidate"' EXIT
     chmod 600 "$candidate"
     cp --preserve=mode profiles.json "$candidate"
-    profile_uuid="$(docker run --rm "$XRAY_IMAGE" uuid | tail -n 1 | tr -d '\r')"
+    if ! profile_uuid="$(docker run --rm "$XRAY_IMAGE" uuid | tail -n 1 | tr -d '\r')" || [[ -z "$profile_uuid" ]]; then
+      die "Could not create a profile UUID. Check that the pinned image runs in Docker, then retry adding the profile."
+    fi
     python3 ./profiles.py --file "$candidate" add "$2" "$profile_uuid"
     apply_candidate "$candidate"
     trap - EXIT

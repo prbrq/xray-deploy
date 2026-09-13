@@ -3,17 +3,17 @@ set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 die(){ echo "ERROR: $*" >&2; exit 1; }
 [[ "${EUID}" -eq 0 ]] || die "Run ./deploy.sh as root (or with sudo)."
-command -v docker >/dev/null 2>&1 || die "Docker is not installed."
-docker compose version >/dev/null 2>&1 || die "Docker Compose v2 plugin is not available."
-command -v python3 >/dev/null 2>&1 || die "python3 is required."
-[[ -f .env ]] || die ".env not found. Run ./bootstrap.sh first."
-[[ -f config.json.template ]] || die "config.json.template not found."
-[[ -f profiles.py ]] || die "profiles.py not found."
+command -v docker >/dev/null 2>&1 || die "Docker Engine is not available. On a supported VPS run ./install-docker.sh as root, then rerun ./deploy.sh."
+docker compose version >/dev/null 2>&1 || die "Docker Compose v2 plugin is not available. On a supported VPS run ./install-docker.sh as root, then rerun ./deploy.sh."
+command -v python3 >/dev/null 2>&1 || die "python3 is required. Install it with the OS package manager, then rerun ./deploy.sh."
+[[ -f .env ]] || die ".env not found. Restore it from a protected backup or run ./bootstrap.sh before deploying."
+[[ -f config.json.template ]] || die "config.json.template is missing. Restore the trusted deployment files before deploying."
+[[ -f profiles.py ]] || die "profiles.py is missing. Restore the trusted deployment files before deploying."
 set -a
 source .env
 set +a
 for name in XRAY_IMAGE CLIENT_UUID REALITY_PRIVATE_KEY REALITY_PUBLIC_KEY REALITY_SHORT_ID REALITY_TARGET REALITY_SNI SERVER_ADDRESS CLIENT_FINGERPRINT; do
-  [[ -n "${!name:-}" ]] || die "$name is empty in .env"
+  [[ -n "${!name:-}" ]] || die "$name is empty in .env. Restore the protected credentials backup or correct the local file; do not publish its contents."
 done
 PROFILES_FILE="${PROFILES_FILE:-profiles.json}"
 [[ "$PROFILES_FILE" != */* && "$PROFILES_FILE" != "." && "$PROFILES_FILE" != ".." ]] || die "PROFILES_FILE must name a file in the deployment directory."
@@ -44,15 +44,17 @@ chown "$XRAY_UID:$XRAY_UID" config.json
 chmod 600 config.json .env "$PROFILES_FILE"
 
 echo "Validating Xray configuration..."
-docker run --rm -v "$PWD/config.json:/etc/xray/config.json:ro" "$XRAY_IMAGE" run -test -c /etc/xray/config.json
+if ! docker run --rm -v "$PWD/config.json:/etc/xray/config.json:ro" "$XRAY_IMAGE" run -test -c /etc/xray/config.json >/dev/null; then
+  die "Xray rejected the rendered configuration. Restore the trusted template or profile registry, then rerun ./deploy.sh; do not publish config.json."
+fi
 
 echo "Starting Xray..."
-docker compose up -d --force-recreate
+if ! docker compose up -d --force-recreate; then
+  die "Docker Compose could not start Xray. Check that TCP/443 is free and the Docker daemon is running, then rerun ./deploy.sh."
+fi
 sleep 1
 if ! docker inspect -f '{{.State.Running}}' xray-reality 2>/dev/null | grep -qx true; then
-  echo "Xray container failed to stay running." >&2
-  docker logs --tail 100 xray-reality >&2 || true
-  exit 1
+  die "Xray container did not stay running. Inspect its logs locally with 'docker logs --tail 100 xray-reality', correct the issue, then rerun ./deploy.sh. Do not publish the logs."
 fi
 
 echo
@@ -60,7 +62,7 @@ docker compose ps
 if command -v ss >/dev/null 2>&1; then
   echo
   echo "TCP/443 listeners:"
-  ss -ltn 2>/dev/null | grep -E '(^|[[:space:]])[^[:space:]]*:443[[:space:]]' || echo "WARNING: ss did not show a TCP/443 listener."
+  ss -ltn 2>/dev/null | grep -E '(^|[[:space:]])[^[:space:]]*:443[[:space:]]' || echo "WARNING: ss did not show a TCP/443 listener. Check 'docker compose ps' and whether another service owns TCP/443."
 fi
 
 echo
