@@ -37,42 +37,40 @@ Internet
 - вы готовы самостоятельно выбрать REALITY target; скрипт не выбирает его автоматически;
 - терминал и история сессии не будут доступны посторонним: URI профиля выводится только по явному запросу.
 
-`install-docker.sh` устанавливает Docker Engine и Docker Compose v2 только на указанные ОС. Он использует официальный подписанный Docker APT-репозиторий и не удаляет конфликтующие пакеты автоматически. `bootstrap.sh`, `deploy.sh` и `profile.sh` запускаются от root (через `sudo`); Xray внутри контейнера при этом работает без root.
+`install-docker.sh` устанавливает Docker Engine и Docker Compose v2 только на указанные ОС. Он использует официальный подписанный Docker APT-репозиторий и не удаляет конфликтующие пакеты автоматически. `target.sh`, `bootstrap.sh`, `deploy.sh` и `profile.sh` запускаются от root (через `sudo`); Xray внутри контейнера при этом работает без root.
 
 ## 1. Подготовить VPS
 
 ```bash
 git clone https://github.com/prbrq/xray-deploy.git xray-deploy
 cd xray-deploy
-chmod +x install-docker.sh bootstrap.sh deploy.sh profile.sh
+chmod +x install-docker.sh target.sh bootstrap.sh deploy.sh profile.sh
 sudo ./install-docker.sh
 ```
 
 Если Docker и Compose v2 уже установлены, `install-docker.sh` только проверит daemon и завершится.
 
-## 2. Установить сервер
+## 2. Подобрать и проверить REALITY target
+
+Target намеренно не выбирается автоматически: это решение владельца VPS. После установки Docker запустите интерактивного помощника:
+
+```bash
+sudo ./target.sh choose
+```
+
+Он объяснит критерии выбора и способы самостоятельного поиска, затем примет введённый hostname и поэтапно проверит DNS, исходящий `TCP/443` и TLS-handshake через `xray tls ping`. Команда не меняет deployment, не сохраняет candidate и не печатает target/SNI в диагностике. Успешный результат означает только, что hostname технически доступен из этой VPS в момент проверки; он не является рекомендацией и не гарантирует будущую стабильность.
+
+Вводите только hostname или `https://hostname/`; URL с путём, query-параметрами или портом не поддерживается. Не выбирайте без осознанного решения популярный generic CDN и не передавайте target/SNI в Git, чаты, тикеты или логи.
+
+## 3. Установить сервер
 
 ```bash
 sudo ./bootstrap.sh
 ```
 
-Bootstrap показывает пять этапов: проверку требований, подготовку закреплённого образа, настройку credentials и target, TLS-проверку, затем deploy. Он фиксирует origin URL и commit hash, скачивает pinned image, создаёт недостающие UUID/X25519 keys/short ID, определяет публичный IP для клиентского адреса, сохраняет `.env` и защищённый реестр `profiles.json`, рендерит и валидирует `config.json`, запускает Compose и лишь после успешного deploy удаляет `.git`.
+Bootstrap показывает пять этапов: проверку требований, подготовку закреплённого образа, интерактивный выбор и проверку target, сохранение credentials и deploy. При отсутствии target он запускает того же помощника и позволяет повторять ввод после неудачной проверки. Он фиксирует origin URL и commit hash, скачивает pinned image, создаёт недостающие UUID/X25519 keys/short ID, определяет публичный IP для клиентского адреса, сохраняет `.env` и защищённый реестр `profiles.json`, рендерит и валидирует `config.json`, запускает Compose и лишь после успешного deploy удаляет `.git`.
 
-При повторном запуске существующий `.env` загружается, поэтому уже созданные credentials не регенерируются.
-
-## 3. Выбрать REALITY target
-
-Target намеренно не выбирается автоматически. Это должен быть стабильный HTTPS hostname, который подходит для сети и ASN вашего VPS. Для первичной ориентации можно посмотреть ASN:
-
-```bash
-curl -s https://ipinfo.io/json
-```
-
-В prompt допустимы оба формата: hostname, например `globconnex.com`, и полная HTTPS-ссылка, например `https://globconnex.com/`. Скрипт безопасно уберёт `https://` и завершающий `/`, сохранит hostname и проверит его командой `xray tls ping` с SNI. URL с путём, query-параметрами или портом не поддерживается.
-
-Не выбирайте без причины популярный generic CDN.
-
-Если проверка не прошла, не обходите её. Типичные причины: hostname не разрешается с VPS, VPS не может установить исходящее HTTPS-соединение, сервер не принимает handshake с данным SNI, либо target нестабилен или фильтруется в сети VPS. Проверьте DNS и исходящий HTTPS, затем выберите другой стабильный HTTPS host и повторите `sudo ./bootstrap.sh`.
+При повторном запуске существующий `.env` загружается, поэтому уже созданные credentials не регенерируются. Bootstrap проверяет сохранённый target заново, но не предлагает и не подставляет другой автоматически.
 
 ## 4. Проверить работу и управлять профилями
 
@@ -218,6 +216,7 @@ xray-deploy/
 ├── docker-compose.yml
 ├── install-docker.sh
 ├── profile.sh
+├── target.sh
 ├── profiles.json
 └── profiles.py
 ```

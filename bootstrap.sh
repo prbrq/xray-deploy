@@ -17,7 +17,7 @@ prompt(){
   fi
   printf -v "$var_name" '%s' "$value"
 }
-valid_hostname(){ [[ "$1" =~ ^[A-Za-z0-9.-]+$ ]] && [[ "$1" != .* ]] && [[ "$1" != *..* ]]; }
+valid_hostname(){ [[ ${#1} -le 253 ]] && [[ "$1" != *..* && "$1" != .* && "$1" != *. ]] && [[ ! "$1" =~ ^[0-9.]+$ ]] && [[ "$1" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]; }
 normalize_reality_target(){
   local value="$1"
   if [[ "$value" =~ ^[Hh][Tt][Tt][Pp][Ss]:// ]]; then
@@ -39,6 +39,7 @@ command -v openssl >/dev/null 2>&1 || die "openssl is required. Install it with 
 command -v python3 >/dev/null 2>&1 || die "python3 is required. Install it with the OS package manager, then rerun ./bootstrap.sh."
 command -v curl >/dev/null 2>&1 || die "curl is required. Install it with the OS package manager, then rerun ./bootstrap.sh."
 [[ -f profiles.py ]] || die "profiles.py is missing. Restore the trusted deployment files before running bootstrap."
+[[ -f target.sh ]] || die "target.sh is missing. Restore the trusted deployment files before running bootstrap."
 
 HAS_GIT=0
 REPOSITORY="unknown"; REVISION="unknown"
@@ -94,28 +95,25 @@ fi
 [[ -n "$SERVER_ADDRESS" ]] || die "SERVER_ADDRESS is required."
 
 
-echo "[3/5] Configuring REALITY target..."
+echo "[3/5] Choosing and validating the REALITY target..."
 if [[ -z "${REALITY_TARGET:-}" ]]; then
   echo
-  echo "Choose a stable HTTPS REALITY target for this VPS."
-  echo "Prefer a suitable host near/in the same ASN and avoid generic CDN targets."
-  prompt REALITY_TARGET "REALITY target hostname or https:// URL"
+  if ! REALITY_TARGET="$(XRAY_IMAGE="$XRAY_IMAGE" ./target.sh --select-for-bootstrap)"; then
+    die "No verified REALITY target was selected. Review the criteria, choose another stable HTTPS hostname, then rerun ./bootstrap.sh."
+  fi
+else
+  REALITY_TARGET="$(normalize_reality_target "$REALITY_TARGET")"
+  if ! REALITY_TARGET="$REALITY_TARGET" XRAY_IMAGE="$XRAY_IMAGE" ./target.sh --check-from-environment; then
+    die "The configured REALITY target did not pass the current checks. Review it or choose another stable HTTPS hostname, then rerun ./bootstrap.sh."
+  fi
 fi
-REALITY_TARGET="$(normalize_reality_target "$REALITY_TARGET")"
-valid_hostname "$REALITY_TARGET" || die "Invalid REALITY_TARGET. Enter a hostname or an HTTPS URL without a path or port."
 REALITY_SNI="${REALITY_SNI:-$REALITY_TARGET}"
-valid_hostname "$REALITY_SNI" || die "Invalid REALITY_SNI hostname: $REALITY_SNI"
+valid_hostname "$REALITY_SNI" || die "Configured REALITY_SNI is not a supported public hostname. Correct the protected .env file, then rerun ./bootstrap.sh."
 case "$CLIENT_FINGERPRINT" in firefox|safari|chrome|edge|ios|android|random|randomized) ;; *) die "Unsupported CLIENT_FINGERPRINT '$CLIENT_FINGERPRINT'. Set it to a supported value in .env, then rerun ./bootstrap.sh." ;; esac
 
 echo
-echo "[4/5] Verifying the REALITY target TLS handshake..."
-tls_output="$(mktemp)"; trap 'rm -f "$tls_output"' EXIT
-if ! docker run --rm "$XRAY_IMAGE" tls ping "$REALITY_TARGET" | tee "$tls_output"; then
-  die "REALITY target check could not start. Check DNS and outbound HTTPS access, then rerun ./bootstrap.sh."
-fi
-if ! awk '/Pinging with SNI/ {in_sni=1; next} in_sni && /Handshake succeeded/ {ok=1} END {exit(ok ? 0 : 1)}' "$tls_output"; then
-  die "REALITY target did not complete a TLS handshake with its SNI. Choose another stable HTTPS host and rerun ./bootstrap.sh."
-fi
+
+echo "[4/5] Saving verified credentials and configuration..."
 
 cat > .env <<EOF
 XRAY_IMAGE=$XRAY_IMAGE
