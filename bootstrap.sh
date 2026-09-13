@@ -38,6 +38,7 @@ fi
 command -v openssl >/dev/null 2>&1 || die "openssl is required."
 command -v python3 >/dev/null 2>&1 || die "python3 is required."
 command -v curl >/dev/null 2>&1 || die "curl is required."
+[[ -f profiles.py ]] || die "profiles.py not found."
 
 HAS_GIT=0
 REPOSITORY="unknown"; REVISION="unknown"
@@ -122,6 +123,8 @@ SERVER_ADDRESS=$SERVER_ADDRESS
 CLIENT_FINGERPRINT=$CLIENT_FINGERPRINT
 EOF
 chmod 600 .env
+python3 ./profiles.py ensure "$CLIENT_UUID"
+chmod 600 profiles.json
 
 echo
 echo "[5/5] Deploying Xray..."

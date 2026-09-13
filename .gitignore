@@ -1,5 +1,7 @@
 .env
 config.json
+profiles.json
+.profiles.*
 DEPLOYED_FROM
 .DS_Store
 *.swp
