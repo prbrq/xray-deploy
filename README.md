@@ -100,6 +100,22 @@ sudo ./profile.sh revoke Family
 
 `add` создаёт отдельный UUID и применяет конфигурацию; `revoke` удаляет UUID только выбранного профиля и применяет конфигурацию, не затрагивая остальные профили или REALITY credentials. Нельзя отозвать последний профиль: сначала добавьте замену. `list` не печатает credentials, а `show` и команда без аргументов печатают `vless://` URI. Не вставляйте URI в Git, чаты, тикеты, логи или запись экрана.
 
+### Рекомендуемый клиент
+
+**[OneXray](https://onexray.com/)** — кроссплатформенный клиент на базе Xray-core для Android, iOS/iPadOS, Windows, macOS и Linux. Он поддерживает импорт стандартных VLESS URI, включая профиль этого сервера.
+
+### Другие совместимые клиенты
+
+Сервер использует стандартный URI `VLESS + TCP/RAW + REALITY + xtls-rprx-vision`. Помимо OneXray, для импорта профиля могут подойти следующие клиенты:
+
+- **Karing** — Android, iOS/iPadOS, Windows, macOS и Linux;
+- **v2rayNG** — Android;
+- **v2rayN** — Windows, macOS и Linux;
+- **Hiddify Next** — Android, iOS/iPadOS, Windows, macOS и Linux;
+- **Shadowrocket**, **Streisand** и **V2Box** — iOS/iPadOS.
+
+Перед использованием убедитесь, что установленная версия клиента поддерживает не только VLESS и REALITY, но и flow `xtls-rprx-vision`. Импортируйте актуальный URI, полученный через `sudo ./profile.sh show NAME`, только на своём устройстве; не отправляйте его в чаты, тикеты и публичные сервисы.
+
 ## 5. Обычные операции
 
 Все команды ниже выполняйте из каталога deployment через `sudo`. Они не печатают credentials, кроме явной команды `profile.sh show`.
