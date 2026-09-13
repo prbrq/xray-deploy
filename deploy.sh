@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 die(){ echo "ERROR: $*" >&2; exit 1; }
+[[ "${EUID}" -eq 0 ]] || die "Run ./deploy.sh as root (or with sudo)."
 command -v docker >/dev/null 2>&1 || die "Docker is not installed."
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 plugin is not available."
 command -v python3 >/dev/null 2>&1 || die "python3 is required."

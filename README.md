@@ -34,20 +34,18 @@ Internet
 
 ## Требования
 
-До bootstrap должны быть установлены Docker Engine, Docker Compose v2, `curl`, `openssl`, `python3`. `git` нужен только для clone/provenance. TCP/443 должен быть разрешён в firewall VPS/провайдера.
+Поддерживается автоматическая установка Docker Engine и Docker Compose v2 на `amd64` и `arm64` для Ubuntu 22.04/24.04/26.04 и Debian 12/13. `install-docker.sh` запускается от root (или через `sudo`), использует официальный подписанный Docker APT-репозиторий и не удаляет конфликтующие пакеты автоматически. `bootstrap.sh`, `deploy.sh` и `profile.sh` также запускаются от root: runtime-контейнер Xray при этом работает без root.
 
-```bash
-docker --version
-docker compose version
-```
+До bootstrap нужен `git` только для clone/provenance. TCP/443 должен быть разрешён в firewall VPS/провайдера.
 
 ## Быстрый старт
 
 ```bash
 git clone <REPOSITORY_URL> xray-deploy
 cd xray-deploy
-chmod +x bootstrap.sh deploy.sh profile.sh
-./bootstrap.sh
+chmod +x install-docker.sh bootstrap.sh deploy.sh profile.sh
+./install-docker.sh # либо: sudo ./install-docker.sh
+./bootstrap.sh # либо: sudo ./bootstrap.sh
 ```
 
 Bootstrap фиксирует origin URL и commit hash, скачивает pinned Xray image, генерирует отдельные UUID/X25519 keys/shortId, определяет публичный IP, просит REALITY target, проверяет target через `xray tls ping`, создаёт `.env`, рендерит и валидирует `config.json`, запускает Compose, печатает готовый `vless://` URI для OneXray, записывает `DEPLOYED_FROM` и **только после успешного deploy удаляет `.git`**.
@@ -76,6 +74,7 @@ xray-deploy/
 ├── config.json.template
 ├── deploy.sh
 ├── docker-compose.yml
+├── install-docker.sh
 └── profile.sh
 ```
 

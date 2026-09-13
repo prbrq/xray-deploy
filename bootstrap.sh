@@ -19,8 +19,11 @@ prompt(){
 }
 valid_hostname(){ [[ "$1" =~ ^[A-Za-z0-9.-]+$ ]] && [[ "$1" != .* ]] && [[ "$1" != *..* ]]; }
 
-command -v docker >/dev/null 2>&1 || die "Docker is not installed. Install Docker Engine and Compose v2, then rerun ./bootstrap.sh."
-docker compose version >/dev/null 2>&1 || die "Docker Compose v2 plugin is not available."
+[[ "${EUID}" -eq 0 ]] || die "Run ./bootstrap.sh as root (or with sudo)."
+
+if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+  die "Docker Engine with Compose v2 is required. On supported Ubuntu/Debian run ./install-docker.sh as root, then rerun ./bootstrap.sh."
+fi
 command -v openssl >/dev/null 2>&1 || die "openssl is required."
 command -v python3 >/dev/null 2>&1 || die "python3 is required."
 command -v curl >/dev/null 2>&1 || die "curl is required."

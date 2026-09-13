@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
+[[ "${EUID}" -eq 0 ]] || { echo "ERROR: Run ./profile.sh as root (or with sudo)." >&2; exit 1; }
 [[ -f .env ]] || { echo "ERROR: .env not found. Run ./bootstrap.sh first." >&2; exit 1; }
 set -a
 source .env
