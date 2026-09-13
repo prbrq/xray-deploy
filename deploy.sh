@@ -53,5 +53,4 @@ if command -v ss >/dev/null 2>&1; then
 fi
 
 echo
-echo "OneXray profile:"
-./profile.sh
+echo "Xray is running. To print the OneXray profile in a private terminal, run: ./profile.sh"

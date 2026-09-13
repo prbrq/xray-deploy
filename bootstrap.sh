@@ -21,6 +21,9 @@ valid_hostname(){ [[ "$1" =~ ^[A-Za-z0-9.-]+$ ]] && [[ "$1" != .* ]] && [[ "$1" 
 
 [[ "${EUID}" -eq 0 ]] || die "Run ./bootstrap.sh as root (or with sudo)."
 
+echo "== xray-deploy bootstrap =="
+echo "[1/5] Checking prerequisites..."
+
 if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
   die "Docker Engine with Compose v2 is required. On supported Ubuntu/Debian run ./install-docker.sh as root, then rerun ./bootstrap.sh."
 fi
@@ -47,16 +50,16 @@ fi
 XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core@sha256:3629bf7d825748cda29698ac354f8f2146f6b292edb9eb0c7cb7fe0583dae091}"
 CLIENT_FINGERPRINT="${CLIENT_FINGERPRINT:-firefox}"
 
-echo "Pulling pinned Xray image..."
+echo "[2/5] Preparing pinned Xray image..."
 docker pull "$XRAY_IMAGE" >/dev/null
 
 if [[ -z "${CLIENT_UUID:-}" ]]; then
-  echo "Generating VLESS UUID..."
+  echo "Preparing initial VLESS access credentials..."
   CLIENT_UUID="$(docker run --rm "$XRAY_IMAGE" uuid | tail -n 1 | tr -d '\r')"
 fi
 
 if [[ -z "${REALITY_PRIVATE_KEY:-}" || -z "${REALITY_PUBLIC_KEY:-}" ]]; then
-  echo "Generating REALITY X25519 key pair..."
+  echo "Preparing REALITY credentials..."
   key_output="$(docker run --rm "$XRAY_IMAGE" x25519)"
   REALITY_PRIVATE_KEY="$(printf '%s\n' "$key_output" | awk -F': ' '/^PrivateKey:/ {print $2; exit}')"
   REALITY_PUBLIC_KEY="$(printf '%s\n' "$key_output" | awk -F': ' '/^Password \(PublicKey\):/ {print $2; found=1; exit} /^Password:/ {candidate=$2} END {if (!found && candidate != "") print candidate}')"
@@ -65,7 +68,7 @@ if [[ -z "${REALITY_PRIVATE_KEY:-}" || -z "${REALITY_PUBLIC_KEY:-}" ]]; then
 fi
 
 if [[ -z "${REALITY_SHORT_ID:-}" ]]; then
-  echo "Generating REALITY short ID..."
+  echo "Preparing REALITY short ID..."
   REALITY_SHORT_ID="$(openssl rand -hex 8)"
 fi
 
@@ -75,6 +78,8 @@ if [[ -z "${SERVER_ADDRESS:-}" ]]; then
 fi
 [[ -n "$SERVER_ADDRESS" ]] || die "SERVER_ADDRESS is required."
 
+
+echo "[3/5] Configuring REALITY target..."
 if [[ -z "${REALITY_TARGET:-}" ]]; then
   echo
   echo "Choose a stable HTTPS REALITY target for this VPS."
@@ -87,13 +92,13 @@ valid_hostname "$REALITY_SNI" || die "Invalid REALITY_SNI hostname: $REALITY_SNI
 case "$CLIENT_FINGERPRINT" in firefox|safari|chrome|edge|ios|android|random|randomized) ;; *) die "Unsupported CLIENT_FINGERPRINT '$CLIENT_FINGERPRINT'." ;; esac
 
 echo
-echo "Testing REALITY target with Xray..."
+echo "[4/5] Verifying the REALITY target TLS handshake..."
 tls_output="$(mktemp)"; trap 'rm -f "$tls_output"' EXIT
 if ! docker run --rm "$XRAY_IMAGE" tls ping "$REALITY_TARGET" | tee "$tls_output"; then
-  die "xray tls ping failed for $REALITY_TARGET"
+  die "REALITY target check could not start. Check DNS and outbound HTTPS access, then rerun ./bootstrap.sh."
 fi
 if ! awk '/Pinging with SNI/ {in_sni=1; next} in_sni && /Handshake succeeded/ {ok=1} END {exit(ok ? 0 : 1)}' "$tls_output"; then
-  die "TLS handshake with SNI did not succeed for $REALITY_TARGET"
+  die "REALITY target did not complete a TLS handshake with its SNI. Choose another stable HTTPS host and rerun ./bootstrap.sh."
 fi
 
 cat > .env <<EOF
@@ -110,7 +115,7 @@ EOF
 chmod 600 .env
 
 echo
-echo "Deploying..."
+echo "[5/5] Deploying Xray..."
 ./deploy.sh
 
 if [[ "$HAS_GIT" -eq 1 || ! -f DEPLOYED_FROM ]]; then
@@ -136,7 +141,10 @@ fi
 echo
 echo "Bootstrap complete."
 echo "Deployment provenance: $PWD/DEPLOYED_FROM"
-echo "Secrets/config:       $PWD/.env and $PWD/config.json"
+echo "Secrets/config:       $PWD/.env and $PWD/config.json (0600)"
 echo
-echo "To print the OneXray URI again: ./profile.sh"
-echo "To apply local config changes:   ./deploy.sh"
+echo "Next steps:"
+echo "  Check the container:     docker compose ps"
+echo "  Get the profile safely:  ./profile.sh"
+echo "  View service logs:       docker logs -f xray-reality"
+echo "  Apply local changes:     ./deploy.sh"
